@@ -1,0 +1,24 @@
+# Environment — never commit real credentials
+.env
+
+# Generated data — committed example CSV is the only exception
+data/*
+!data/leads_input.example.csv
+
+# Node
+node_modules/
+dist/
+
+# TypeScript build output
+*.js.map
+*.d.ts
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,380 @@
+# ROLE
+
+Act as a senior Node.js automation engineer and responsible B2B outreach
+strategist. Build "ClientVelo Engine": a lightweight, CLI-only Node.js MVP for
+low-volume, high-quality local-business prospecting and outreach (10-20 emails
+per day at most). No frontend.
+
+Priorities, in order: safety and correctness, terms-compliant data collection,
+human review before any outreach, conservative deliverability practices,
+crash-safe resumable state, and simplicity. This is a 7-day experiment, so
+prefer a small, reliable, testable tool over feature count.
+
+# EXECUTION RULES
+
+1. Before writing any code, produce an implementation plan: architecture, file
+   tree, data schemas, CLI commands, config variables, safety controls, testing
+   plan, risks and assumptions. Then STOP and wait for my approval.
+2. Build in the four phases below. After each phase: run tests and a dry-run
+   demonstration, show the output, summarize what was done, then STOP for approval.
+3. Never send a real email unless ALL of these are true: DRY_RUN=false, the
+   --send flag is present, the draft is approved (hash matches), the message
+   passes validation, the recipient is not suppressed, it is not a duplicate,
+   the effective daily cap is not reached, the send window is active, and the
+   operator confirmed the batch (when confirmation is enabled).
+4. Never invent facts. Every claim in an email must trace to a measured audit
+   value or a source URL.
+5. Keep the project to roughly 20 source files. Merge small modules. No stub
+   or placeholder modules.
+
+# DATA-COLLECTION RESTRICTIONS
+
+Do NOT implement: Google Maps scraping or bulk export, CAPTCHA bypass, login
+bypass, proxy rotation, stealth or fingerprint-spoofing browsers, anti-bot
+evasion, access to anything behind technical controls, automatic contact-form
+submission, or guessing email addresses from patterns (info@, firstname@, etc.).
+
+The default lead source is a CSV I prepare by hand. Put sourcing behind a small
+provider interface so a permitted API can be added later.
+
+Playwright is used only for bounded inspection of public business websites
+listed in my CSV:
+- max 4 pages per domain (homepage, contact, about, one service page)
+- per-page timeout, per-domain delay, max response size
+- respect robots.txt where applicable
+- clean failure handling; skip and log unreachable sites
+- never crawl a whole domain or submit forms
+
+# STACK
+
+Node.js 20+, TypeScript run with tsx, ESM. Dependencies: playwright,
+nodemailer, dotenv, zod, tsx. Tests use node:test, run with:
+  node --import tsx --test tests/*.test.ts
+CLI scripts use: tsx src/cli.ts <command>. A minimal console logger is fine;
+never log secrets. Show exact commands for dev and test.
+
+# PROJECT STRUCTURE (target ~16 source files)
+
+clientvelo-engine/
+  src/cli.ts          command router, safe defaults
+  src/config.ts       env loading + zod validation, fails clearly
+  src/types.ts        schemas and types
+  src/store.ts        JSON store with atomic writes (temp file, fsync, rename)
+  src/utils.ts        delay, hashing, send-window/timezone, URL normalization
+  src/import.ts       CSV provider behind a provider interface
+  src/enrich.ts       bounded website fetch + contact extraction
+  src/audit.ts        local mobile audit + optional PSI
+  src/validate.ts     email syntax, MX lookup, classification
+  src/qualify.ts      lead scoring
+  src/drafts.ts       templates, rendering, approval binding
+  src/suppression.ts  suppression list
+  src/mailer.ts       Nodemailer SMTP client
+  src/queue.ts        dispatch queue + pre-send safety checks
+  src/export.ts       export-manual CSV
+  data/               leads_input.example.csv, leads_raw.json, leads_enriched.json,
+                      leads_validated.json, drafts.json, dispatch_logs.json,
+                      suppression.json, screenshots/, errors/
+  tests/              validate, drafts, suppression, queue, daily-cap, atomic-write
+  package.json, tsconfig.json, README.md, .env.example, .gitignore
+  (.gitignore: .env, data/* except leads_input.example.csv, node_modules)
+
+# LEAD DATA MODEL
+
+Base: id, businessName, category, city, country, websiteUrl, phone, source,
+sourceUrl, sourceCheckedAt, rating, reviewCount, contactName (optional),
+createdAt, updatedAt.
+
+Contact: contactChannel (direct_email | generic_email | contact_form |
+phone_only | none | needs_manual_review), emailCandidates[] (all found emails,
+each classified), email (chosen), emailType (business_public | generic_role |
+personal_public | unknown), chosenEmailReason, requiresManualAction.
+
+Validation: emailValidationStatus (not_checked | syntax_valid | domain_has_mx |
+role_address | invalid | needs_manual_review).
+
+Audit: auditStatus (not_checked | complete | partial | failed | site_unreachable),
+psiStatus (unavailable | complete | disabled), screenshotPath, and an `audit`
+object with: viewportMeta, horizontalOverflow, telLink, bookingKeywordFound,
+bookingCtaAboveFold, whatsappOrSocialBookingLink, loadTimeMs, psiMobileScore
+(nullable), httpStatuses. Plus: primaryIssue, evidenceUrl, evidenceText,
+personalizationNote.
+
+Primary issues: slow_or_heavy_mobile_page, no_visible_booking_cta,
+no_click_to_call, contact_path_has_friction, site_unreachable,
+no_material_issue_detected.
+
+Scoring: qualificationScore, qualificationReasons[].
+
+Workflow status: new, enriched, validated, needs_review, approved, drafted,
+sent, replied, bounced, opted_out, skipped.
+
+Store no unnecessary personal data.
+
+# CSV IMPORT
+
+Columns: businessName,category,city,country,websiteUrl,phone,rating,
+reviewCount,contactName,source,sourceUrl
+
+Command: import --file <path>. Validate required fields, normalize URLs, remove
+exact duplicates, preserve source metadata, write invalid rows to an error
+report (never silently drop), safe to re-run, protect against path traversal.
+
+# ENRICHMENT
+
+Extract only publicly visible info: mailto links, visible business emails,
+simple obfuscations ("name [at] domain.com", "name (at) domain (dot) com"),
+phone numbers, contact-form presence, page title, service descriptions.
+Preserve all email candidates, classify each, pick a preferred one with a
+written reason. If only a contact form exists: contactChannel=contact_form,
+email=null, requiresManualAction=true.
+
+# AUDIT
+
+Playwright at 390x844. Measure only observable values (the audit fields above)
+and save one screenshot per lead. Thresholds live in config (LOAD_SLOW_MS,
+PSI_POOR_SCORE, above-the-fold definition). Before flagging
+no_visible_booking_cta, also check for WhatsApp, Messenger, and social booking
+links, and treat those as a booking path. PSI is optional (AUDIT_PSI_ENABLED);
+if PSI is unavailable the audit still completes with psiStatus=unavailable.
+Never claim a site is losing customers or revenue; use cautious wording such as
+"may make it harder for mobile visitors to...".
+
+# EMAIL VALIDATION
+
+Syntax check, domain normalization, MX lookup via dns.promises.resolveMx with
+timeout, optional disposable-domain check, role/blocked classification.
+- Role addresses (info@, contact@, hello@, office@, support@, sales@, admin@)
+  are flagged and ranked lower, not rejected.
+- Blocked (noreply@, no-reply@, abuse@, postmaster@, mailer-daemon@) are excluded.
+- MX success only means the domain advertises mail servers. It does not prove
+  the mailbox exists or that delivery will succeed. No SMTP mailbox probing.
+  Never claim zero bounces or call an address "verified" on MX alone.
+Output: data/leads_validated.json.
+
+# QUALIFICATION
+
+Score only from observable evidence: niche match, city match, has website,
+audit completed, clear issue, minimum reviewCount (config), contactability,
+evidence quality. Output qualificationReasons. Only leads I mark approved may
+enter drafting.
+
+# DRAFTS
+
+Plain text only. Body = greeting + exactly 3 sentences + footer.
+- Greeting: "Hi {contactName}," if present, else "Hi there,".
+- Sentence 1: a specific measured observation (with the real value).
+- Sentence 2: cautious possible consequence for mobile visitors.
+- Sentence 3: a tiny yes/no CTA, e.g. "Would you like me to send a 60-second
+  video showing one possible fix?"
+- Footer (outside the 3 sentences): sender name, business name, postal address,
+  opt-out line.
+- 2-3 variants keyed by primaryIssue (slow page, no booking CTA, no click-to-call,
+  unclear contact path).
+- Subject: accurate, natural, under 8 words, not deceptive; the business name is
+  optional.
+- Never: guaranteed-loss or revenue claims, fake familiarity, fake urgency,
+  "Re:"/"Fwd:" prefixes, attachments, links, images, tracking pixels, or the word
+  "redesign".
+- Rendering FAILS on any missing/undefined/null token, missing compliance field,
+  or banned phrase ("losing customers", "you are losing", "guaranteed",
+  "revenue", ...).
+- drafts.json entries start with approved:false and support an optional
+  customOpener.
+- `approve` command binds approval to a hash of recipient + subject + body. Any
+  edit voids approval and the send queue must re-verify the hash.
+
+# SUPPRESSION
+
+data/suppression.json records {email, reason, createdAt, source}. Commands:
+mark-opt-out, mark-bounce, mark-invalid (all suppress immediately) and
+mark-replied (sets status=replied, does NOT suppress). Suppression is checked
+immediately before every send, even for previously approved drafts.
+
+# SEND QUEUE
+
+Nodemailer over configurable SMTP (Gmail App Password allowed for testing; any
+provider via env). One message at a time.
+- Pre-send re-checks: DRY_RUN, --send, approval hash, syntax/MX status,
+  suppression, duplicate status, daily count from dispatch_logs.json, send
+  window/days, effective cap, sender identity, postal address, opt-out line,
+  valid subject/body.
+- Effective cap = min(DAILY_SEND_LIMIT, RAMP_SCHEDULE value for the current
+  campaign day), computed from the log, never memory.
+- Random delay between MIN_DELAY_SECONDS and MAX_DELAY_SECONDS. Delay is pacing
+  only, not a deliverability guarantee.
+- Retry only transient SMTP errors (MAX_RETRIES); never retry permanent
+  recipient errors. Stop the run after 2 consecutive SMTP errors.
+- Bounce stop: halt sending if 2 or more marked bounces occur within the last 20
+  sends, or if bounces/sent exceeds BOUNCE_STOP_RATE once 50+ have been sent.
+  (Bounces arrive later as messages, so mark-bounce feeds this rule.)
+- Duplicate prevention: exact recipient + campaignId + message hash + existing
+  dispatch records. Optional DOMAIN_COOLDOWN_DAYS (adjustable, not absolute).
+- Graceful Ctrl+C, crash-safe state updates.
+- Before a live batch, print a preview (recipient, business, subject, daily
+  count X/Y, window status, dry-run flag) and require confirmation when
+  SEND_CONFIRMATION_REQUIRED=true.
+- Log every attempt to dispatch_logs.json: leadId, recipient, businessName,
+  campaignId, messageHash, timestamp, status (dry_run | sent | transient_error |
+  permanent_error | suppressed | duplicate | skipped), messageId, smtpResponse,
+  errorCode, retryCount, dryRun.
+
+# MANUAL-OUTREACH EXPORT
+
+`export-manual` writes a CSV of phone_only, contact_form, and no-email leads
+(name, phone, website, primaryIssue, evidenceText, screenshotPath) for
+WhatsApp, calls, DMs, or hand-submitted forms.
+
+# CLI COMMANDS
+
+import, enrich, audit, validate, qualify, draft, preview, approve, send,
+mark-opt-out, mark-bounce, mark-invalid, mark-replied, export-manual, status,
+test. Every command is safe by default. `send` is dry-run unless DRY_RUN=false
+AND --send is passed. `preview` shows each draft with its screenshot path and
+the evidence behind each claim.
+
+# ENVIRONMENT (.env.example, validated at startup, fail clearly)
+
+NODE_ENV=development
+DRY_RUN=true
+SEND_CONFIRMATION_REQUIRED=true
+CAMPAIGN_ID=campaign-1
+NICHE=Dental Clinic
+CITY=Dhaka
+COUNTRY=Bangladesh
+TIMEZONE=Asia/Dhaka
+MIN_REVIEW_COUNT=30
+DAILY_SEND_LIMIT=10
+RAMP_SCHEDULE=5,8,10,12,15,18,20
+MIN_DELAY_SECONDS=240
+MAX_DELAY_SECONDS=360
+MAX_RETRIES=2
+DOMAIN_COOLDOWN_DAYS=30
+BOUNCE_STOP_RATE=0.02
+SEND_WINDOW_START=09:00
+SEND_WINDOW_END=17:00
+SEND_DAYS=Sun,Mon,Tue,Wed,Thu
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=
+SMTP_APP_PASSWORD=
+FROM_NAME=
+FROM_EMAIL=
+REPLY_TO=
+BUSINESS_NAME=
+POSTAL_ADDRESS=
+OPT_OUT_LINE=Reply with "unsubscribe" if you would prefer not to receive messages from me.
+AUDIT_PSI_ENABLED=false
+PAGESPEED_INSIGHTS_API_KEY=
+LOAD_SLOW_MS=4000
+PSI_POOR_SCORE=50
+MAX_PAGES_PER_DOMAIN=4
+PAGE_TIMEOUT_MS=15000
+PER_DOMAIN_DELAY_MS=2000
+
+# SECURITY
+
+No secrets in code, .env gitignored, no credentials in logs, safe error
+messages, URL/email/input validation, malformed-JSON protection, path-traversal
+protection, no code execution from input data.
+
+# TESTING (mock SMTP, DNS, Playwright, and time; no real email or uncontrolled
+# network calls)
+
+Cover: malformed/valid emails, no-MX domain, MX timeout, role and blocked
+classification, duplicate handling, domain cooldown, contact-form-only leads,
+missing template tokens, missing compliance fields, banned phrases, no
+"undefined" in output, approval-hash voiding after edits, suppression and
+opt-out enforcement, reply status behavior, daily cap, ramp schedule, bounce
+stop rule, send window and SEND_DAYS, delay bounds, dry-run behavior, missing
+--send flag, duplicate dispatch prevention, atomic writes, transient retry,
+permanent failure, and graceful interruption.
+
+# README
+
+Cover: what it does and does not do, install (npm install, npx playwright
+install chromium, cp .env.example .env), CSV format, the full dry-run workflow
+(import, enrich, audit, validate, qualify, draft, preview, approve, send
+--dry-run), why MX does not verify a mailbox, why zero bounces cannot be
+guaranteed, suppression handling, SMTP setup, how to stop a batch safely,
+troubleshooting, data formats, and compliance notes. Do not imply guaranteed
+deliverability.
+
+# PHASES (stop for approval after each)
+
+PHASE 1 - Foundation: config, types, atomic store, CSV import, status, tests
+for schema and storage. Demo: dry-run import of the example CSV.
+
+PHASE 2 - Enrichment and audit: bounded fetcher, contact extraction, contact-
+form classification, local mobile audit with screenshots, optional PSI. Demo: a
+small batch (max 5 leads).
+
+PHASE 3 - Validation, qualification, drafts, approval: MX/classification,
+scoring, templates, renderer with failure rules, approve, preview, export-manual,
+suppression commands. Demo: render sample drafts and a preview, send nothing.
+
+PHASE 4 - Send queue: SMTP client, dry-run queue, all pre-send checks, ramp
+cap, bounce stop, send window/days, retries, dispatch logging, graceful
+shutdown. Demo: full dry-run end to end. Live sending stays disabled until I
+approve it explicitly.
+
+# FINAL DELIVERABLES
+
+package.json, tsconfig.json, .env.example, .gitignore, TypeScript source,
+example CSV and JSON files, tests, README, exact install and dry-run commands,
+and risk notes that explicitly cover: platform/Maps terms, website-scraping
+fragility, CAPTCHA and anti-bot limits, PageSpeed quotas, MX limitations, bounce
+uncertainty, SMTP reputation, personal-Gmail risks, jurisdiction differences,
+contact forms requiring manual handling, false positives in audit heuristics,
+and the absence of any zero-bounce guarantee.
+
+
+AMENDMENT: AUTOMATIC LEAD DISCOVERY (OpenStreetMap). Apply these edits in place:
+- In "DATA-COLLECTION RESTRICTIONS": replace "The default lead source is a CSV I
+  prepare by hand" with "The default lead source is the OpenStreetMap Overpass
+  provider; CSV import is the manual fallback." Replace "websites listed in my
+  CSV" with "websites from the discover or import providers."
+- Add src/discover.ts (OSM provider behind the provider interface). Add
+  data/seen.json and data/osm_cache/. Add commands discover and run-daily to
+  the CLI list. Add no_website to the primary issues.
+
+DISCOVER
+- Command: discover --niche "Dental Clinic" --city "Dhaka" --limit 40
+- Provider: OSM Overpass API, no API key. No Google Places, no Maps scraping.
+- Query by named administrative area for the city (not a bounding box). Set
+  [out:json][timeout:25]. Keep a niche-to-tag map in config, e.g.
+  Dental Clinic -> amenity=dentist, healthcare=dentist;
+  Salon -> shop=hairdresser, shop=beauty; HVAC -> craft=hvac.
+  Tell me to verify tags for new niches at taginfo.openstreetmap.org.
+- Overpass etiquette: descriptive User-Agent, one query per run, cache raw
+  responses in data/osm_cache/ (reuse for 24h), configurable OVERPASS_URL (public
+  mirror fallback), exponential backoff on HTTP 429/504, never loop or hammer.
+- Extract (nodes, ways, relations; use center for ways):
+  id -> place_id as "osm:{type}/{id}"; name; address from addr:* tags;
+  phone (phone | contact:phone | contact:mobile);
+  website (website | contact:website | url);
+  email (email | contact:email);
+  social (contact:facebook, contact:instagram, contact:whatsapp).
+  Public business tags only. An OSM-tagged email is still a candidate: it must
+  pass validate and MX like any other and is recorded with source=osm_tag.
+- rating and reviewCount are null for OSM leads. MIN_REVIEW_COUNT applies only
+  when a value exists. Scoring for OSM leads uses: has website, has email tag,
+  has phone, tag completeness, audit result, city match.
+- Skip names in CHAIN_BLOCKLIST. Skip entries with no name.
+- Hard caps: MAX_DISCOVER_PER_RUN=50; stop cleanly and log.
+- Dedupe by place_id and website domain. seen.json prevents re-surfacing.
+- No website: primaryIssue=no_website, contactChannel=phone_only (or direct_email
+  if an OSM email tag exists), routed to export-manual. no_website draft variant
+  is manual-use only (WhatsApp/call script), never auto-emailed.
+- Set source="OpenStreetMap contributors (ODbL)" and sourceUrl to the OSM object
+  URL. README must include the attribution "© OpenStreetMap contributors" and
+  a note on ODbL.
+- run-daily = discover -> enrich -> audit -> validate -> qualify -> draft ->
+  preview. It STOPS before approve and never sends. Discover belongs in Phase 1.
+- New env: OVERPASS_URL=https://overpass-api.de/api/interpreter,
+  OVERPASS_TIMEOUT_SECONDS=25, MAX_DISCOVER_PER_RUN=50, CHAIN_BLOCKLIST=,
+  USER_AGENT=ClientVeloEngine/0.1 (contact: your-email)
+- Tests: mock Overpass. Cover the contact:* tag fallbacks, missing-name skip,
+  dedupe, seen.json, cache reuse, 429 backoff, null-review handling, and
+  no_website routing.
+- The ban on scraping the Google Maps website stays.
