@@ -1,0 +1,4 @@
+businessName,category,city,country,websiteUrl,phone,rating,reviewCount,contactName,source,sourceUrl
+Dhaka Smile Dental,Dental Clinic,Dhaka,Bangladesh,https://dhakasmile.com.bd,+880-2-9876543,4.7,142,Dr. Akter,manual,https://maps.example.com/dhakasmile
+Greenland Oral Care,Dental Clinic,Dhaka,Bangladesh,https://greenlanddental.bd,+880-1712345678,4.3,89,,manual,https://maps.example.com/greenland
+Advanced Dental Centre,Dental Clinic,Dhaka,Bangladesh,https://advanceddental.com.bd,+880-2-8833221,4.5,211,Dr. Rahman,manual,https://maps.example.com/advanced
