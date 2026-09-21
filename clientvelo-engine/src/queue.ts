@@ -1,4 +1,6 @@
+import fs from 'node:fs';
 import {
+
   readDrafts,
   writeDrafts,
   readDispatchLogs,
@@ -39,7 +41,66 @@ export function setupGracefulShutdown() {
   process.on('SIGTERM', handler);
 }
 
-export async function processQueue(cliSendFlag: boolean): Promise<void> {
+export async function previewSendBatch(): Promise<{ count: number; fingerprint: string; drafts: any[] }> {
+  const drafts = await readDrafts();
+  const leads = await readLeads('data/leads_validated.json');
+  const logs = await readDispatchLogs();
+  const suppression = await readSuppression();
+
+  const campaignDay = currentCampaignDay(logs, config.CAMPAIGN_ID, config.TIMEZONE);
+  const rampCap = config.rampSchedule[Math.min(campaignDay - 1, config.rampSchedule.length - 1)] ?? config.DAILY_SEND_LIMIT;
+  const effectiveCap = Math.min(config.DAILY_SEND_LIMIT, rampCap);
+
+  const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: config.TIMEZONE }).format(new Date());
+
+  const sentTodayCount = logs.filter(
+    (l) => l.status === 'sent' && l.timestamp.startsWith(todayStr)
+  ).length;
+
+  let remainingSends = effectiveCap - sentTodayCount;
+  const previewedDrafts = [];
+
+  for (const draft of drafts) {
+    if (remainingSends <= 0) break;
+    if (!draft.approved) continue;
+
+    const existingLog = logs.find((l) => l.draftId === draft.id && (l.status === 'sent' || l.status === 'suppressed' || l.status === 'permanent_error' || l.status === 'dry_run'));
+    if (existingLog) continue;
+
+    const windowCheck = isInSendWindow({
+      timezone: config.TIMEZONE,
+      windowStart: config.SEND_WINDOW_START,
+      windowEnd: config.SEND_WINDOW_END,
+      sendDays: config.sendDays,
+    });
+    if (!windowCheck.allowed) break; // if outside window, we send 0
+
+    const lead = leads.find((l) => l.id === draft.leadId);
+    if (!lead) continue;
+
+    const currentHash = sha256(draft.recipientEmail + draft.subject + draft.body);
+    if (draft.approvalHash !== currentHash) continue;
+
+    const isSuppressed = suppression.some(
+      (s) => s.email.toLowerCase() === draft.recipientEmail.toLowerCase()
+    );
+    if (isSuppressed) continue;
+
+    previewedDrafts.push(draft);
+    remainingSends--;
+  }
+
+  const concatenatedHashes = previewedDrafts.map(d => d.approvalHash).join('');
+  const fingerprint = previewedDrafts.length > 0 ? sha256(concatenatedHashes) : '';
+
+  return {
+    count: previewedDrafts.length,
+    fingerprint,
+    drafts: previewedDrafts,
+  };
+}
+
+export async function processQueue(cliSendFlag: boolean, confirmBatchFingerprint?: string): Promise<void> {
   const realSend = !config.DRY_RUN && cliSendFlag;
   if (config.SEND_CONFIRMATION_REQUIRED && realSend) {
     // A secondary safety check per specs, though this can be identical to config.DRY_RUN == false
@@ -51,7 +112,26 @@ export async function processQueue(cliSendFlag: boolean): Promise<void> {
     log.info('Running in DRY-RUN mode. No real emails will be sent.');
   }
 
-  setupGracefulShutdown();
+  const LOCK_FILE = '.send.lock';
+  const STOP_FILE = '.stop-send';
+
+  if (fs.existsSync(LOCK_FILE)) {
+    log.error(`Lock file ${LOCK_FILE} exists. Another send job is already running.`);
+    process.exit(1);
+  }
+
+  if (realSend && confirmBatchFingerprint !== undefined) {
+    const preview = await previewSendBatch();
+    if (preview.fingerprint !== confirmBatchFingerprint) {
+      log.error(`Batch fingerprint mismatch! Expected ${confirmBatchFingerprint}, got ${preview.fingerprint}. Aborting.`);
+      process.exit(1);
+    }
+  }
+
+  fs.writeFileSync(LOCK_FILE, 'locked');
+
+  try {
+    setupGracefulShutdown();
 
   const drafts = await readDrafts();
   const leads = await readLeads('data/leads_validated.json');
@@ -93,6 +173,12 @@ export async function processQueue(cliSendFlag: boolean): Promise<void> {
   for (const draft of drafts) {
     if (isShuttingDown) break;
     if (remainingSends <= 0) break;
+    
+    if (fs.existsSync(STOP_FILE)) {
+      log.info('Detected .stop-send file. Halting send gracefully.');
+      fs.unlinkSync(STOP_FILE);
+      break;
+    }
 
     // Only process approved drafts
     if (!draft.approved) continue;
@@ -176,6 +262,11 @@ export async function processQueue(cliSendFlag: boolean): Promise<void> {
   }
 
   log.info(`Queue processing complete.`);
+  } finally {
+    if (fs.existsSync(LOCK_FILE)) {
+      fs.unlinkSync(LOCK_FILE);
+    }
+  }
 }
 
 async function logDispatch(

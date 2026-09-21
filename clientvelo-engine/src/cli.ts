@@ -362,9 +362,15 @@ function printHelp(): void {
   console.log('  serve [--port <port>] [--demo]      Start the local dashboard server\n');
 }
 
-async function cmdSend(args: string[]) {
-  const isSend = args.includes('--send');
-  await processQueue(isSend);
+async function cmdSend(flags: Record<string, string | boolean>) {
+  const isSend = flags['send'] === true;
+  const confirmBatch = flagStr(flags, 'confirm-batch');
+  
+  if (isSend && !confirmBatch && !config.DRY_RUN) {
+    throw new Error('Usage: tsx src/cli.ts send --send --confirm-batch <fingerprint>');
+  }
+
+  await processQueue(isSend, confirmBatch);
 }
 
 async function cmdServe(flags: Record<string, string | boolean>) {
@@ -408,7 +414,7 @@ async function main(): Promise<void> {
         break;
 
       case 'send':
-        await cmdSend(args);
+        await cmdSend(flags);
         break;
 
       case 'serve':

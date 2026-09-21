@@ -22,46 +22,50 @@ ClientVelo Engine discovers local businesses via OpenStreetMap, enriches them wi
    # Edit .env with your SMTP credentials, limits, and window settings.
    ```
 
-## Workflow (Phase 5 Dashboard)
+## Workflow (Phase 6 Command Center)
 
-The backend engine processes the leads, but you MUST review and approve them using the local web dashboard. **The dashboard NEVER sends emails.**
+The backend engine processes the leads, but you MUST review and approve them using the local web dashboard. **The dashboard NEVER sends emails directly.** Instead, it securely spawns background CLI jobs that you can monitor in real-time.
 
-1. **Import**
-   Run the initial import step. This deduplicates against existing leads in `data/leads.json` and skips invalid rows:
+1. **Start the Dashboard**
    ```bash
-   npx tsx src/cli.ts import data/raw/dentists-seattle.csv
+   npx tsx src/cli.ts serve
+   ```
+   - Open \`http://localhost:3000\`
+   - You must use the generated \`X-CV-Token\` (printed in terminal) to authenticate if not using \`--demo\`.
+
+2. **Discover (Action Center)**
+   Use the UI to discover leads from OpenStreetMap, or run the CLI:
+   ```bash
+   npx tsx src/cli.ts discover --niche "dentist" --city "Seattle" --limit 10
    ```
 
-2. **Enrichment & Audit (Playwright)**
-   Crawl imported leads up to a bounded 3-page depth. It extracts an exact `owner@` or `contact@` email, or the first valid business email found. It takes a mobile screenshot and checks for mobile-friendliness.
-   ```bash
+3. **Enrichment & Audit (Playwright)**
+   Crawl imported leads up to a bounded 3-page depth. It extracts an exact \`owner@\` or \`contact@\` email, or the first valid business email found. It takes a mobile screenshot and checks for mobile-friendliness.
+   \`\`\`bash
    npx tsx src/cli.ts enrich
-   ```
+   \`\`\`
 
-3. **Validation, Scoring, & Drafting**
-   Validates syntax and MX records of found emails. Leads with a score >= 50 get moved to `data/leads_validated.json` and receive a draft email in `data/drafts.json`. No emails are sent yet.
-   ```bash
+4. **Validation, Scoring, & Drafting**
+   Validates syntax and MX records of found emails. Leads with a score >= 50 get moved to \`data/leads_validated.json\` and receive a draft email in \`data/drafts.json\`. No emails are sent yet.
+   \`\`\`bash
    npx tsx src/cli.ts qualify
-   ```
+   \`\`\`
 
-4. **Review & Approval (Dashboard)**
+5. **Review & Approval (Dashboard)**
    To ensure maximum safety and deliverability, you must visually review and approve drafts.
-   ```bash
-   npx tsx src/cli.ts serve --demo
-   ```
-   - Open `http://localhost:3000`
-   - Use the **Review Workspace** to navigate drafts (using `J`/`K`).
-   - Press `A` to approve. The draft's exact text is SHA-256 hashed.
-
+   - Use the **Review Workspace** to navigate drafts (using \`J\`/\`K\`).
+   - Press \`A\` to approve. The draft's exact text is SHA-256 hashed.
+   
    For leads lacking an email or phone-only, use the **Manual Outreach** view to generate WhatsApp scripts.
 
-5. **Send Queue**
-   Dispatches approved drafts to the SMTP server defined in your `.env`.
-   The engine enforces a strict sending schedule (M-F, 9am-5pm) and a daily cap (max 20/day) to prevent spam triggering.
-   ```bash
-   npx tsx src/cli.ts queue --send
-   ```
-   Monitor the live send progress from the **Dispatch Logs** view in the dashboard.
+6. **Send Queue (Live Send)**
+   Dispatches approved drafts to the SMTP server defined in your \`.env\`.
+   The engine enforces a strict sending schedule (M-F, 9am-5pm) and a daily cap (max 20/day) to prevent spam triggering. 
+   You can start this from the **Overview Action Center** ("Live Send Approved") or via CLI:
+   \`\`\`bash
+   npx tsx src/cli.ts send --send --confirm-batch <sha256-fingerprint>
+   \`\`\`
+   Monitor the live send progress from the **Live Console** view in the dashboard. The system utilizes file-based locks (\`.send.lock\`) to ensure only one batch can run at a time, and a cooperative halt signal (\`.stop-send\`) can be sent via the UI.
 
 6. **Export (Optional)**
    Export the final structured data for external CRMs or manual processing:
