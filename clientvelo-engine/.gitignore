@@ -1,24 +1,27 @@
-# Environment — never commit real credentials
-.env
-
-# Generated data — committed example CSV is the only exception
-data/*
-!data/leads_input.example.csv
-
-# Node
+# Node dependencies
 node_modules/
-dist/
+npm-debug.log
 
-# TypeScript build output
-*.js.map
-*.d.ts
+# Environment variables
+.env
+.env.local
 
-# Editor
+# Engine Lockfiles
+.send.lock
+.stop-send
+
+# Data Directory (Ignore all data except placeholder/gitkeep)
+data/*
+!data/.gitkeep
+
+# Optional: specifically allow structure if needed
+!data/screenshots/
+data/screenshots/*
+!data/screenshots/.gitkeep
+
+# macOS
+.DS_Store
+
+# Editor / IDE
 .vscode/
 .idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
