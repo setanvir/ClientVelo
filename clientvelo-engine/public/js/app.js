@@ -43,13 +43,10 @@ function renderSidebar() {
   return `
     <div class="w-64 bg-slate-900 text-slate-300 flex flex-col h-full shrink-0 border-r border-slate-800 shadow-xl z-20 relative">
       <div class="p-6 pb-2">
-        <div class="flex items-center gap-2 mb-1">
-          <div class="w-6 h-6 rounded-md bg-gradient-to-br from-indigo-500 to-cvteal flex items-center justify-center shadow-lg shadow-indigo-500/20">
-            <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-          </div>
-          <h1 class="text-xl font-bold tracking-tight text-white">ClientVelo</h1>
+        <div class="mb-1 flex items-center">
+          <img src="/assets/logo.svg" alt="ClientVelo" class="h-8 w-auto drop-shadow-md">
         </div>
-        <p class="text-[10px] text-slate-500 font-semibold uppercase tracking-widest pl-8 mb-6">Command Center</p>
+        <p class="text-[10px] text-slate-500 font-semibold uppercase tracking-widest pl-2 mb-6">Command Center</p>
       </div>
       <nav class="flex-1 px-4 space-y-1.5 overflow-y-auto">
         <a href="#overview" class="${navClass('overview')}">
@@ -246,13 +243,16 @@ async function renderDiscover() {
           <div>
             <label class="block text-sm font-semibold text-slate-700 mb-1">Niche</label>
             <select id="disc-niche" class="w-full text-sm p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none font-medium text-slate-700">
-              <option value="dentist">Dentist</option>
-              <option value="plumber">Plumber</option>
-              <option value="electrician">Electrician</option>
-              <option value="roofing">Roofing</option>
-              <option value="hvac">HVAC</option>
-              <option value="landscaping">Landscaping</option>
-              <option value="restaurant">Restaurant</option>
+              <option value="Dental Clinic">Dental Clinic</option>
+              <option value="Salon">Salon</option>
+              <option value="HVAC">HVAC</option>
+              <option value="Restaurant">Restaurant</option>
+              <option value="Gym">Gym</option>
+              <option value="Pharmacy">Pharmacy</option>
+              <option value="Optician">Optician</option>
+              <option value="Physiotherapy">Physiotherapy</option>
+              <option value="Veterinary">Veterinary</option>
+              <option value="Car Rental">Car Rental</option>
             </select>
           </div>
           
@@ -412,7 +412,8 @@ async function pollConsoleOutput() {
     
     headerEl.innerHTML = `
       <div class="w-3 h-3 rounded-full ${dot}"></div>
-      <span class="text-sm font-mono font-bold text-slate-200">cli ${job.command} <span class="text-slate-500 font-normal">${job.args.join(' ')}</span></span>
+      <span class="text-sm font-mono font-bold text-slate-200 mr-2">cli ${job.command} <span class="text-slate-500 font-normal">${job.args.join(' ')}</span></span>
+      ${job.status === 'completed' ? `<a href="#leads" class="ml-4 text-[11px] font-bold bg-cvteal text-slate-900 hover:bg-teal-400 px-3 py-1 rounded transition shadow-sm shadow-teal-500/20 uppercase tracking-wide">View Leads Table &rarr;</a>` : ''}
     `;
     
     if (lines.length > 0) {
@@ -651,7 +652,7 @@ async function loadLeadsData(skipFetch = false) {
       if (isExpanded) {
         let imgTag = '<div class="h-48 flex items-center justify-center text-slate-400 bg-slate-100 rounded-lg text-sm font-medium">No screenshot</div>';
         if (l.screenshotPath) {
-          const fn = l.screenshotPath.split(/[/\\]/).pop();
+          const fn = l.screenshotPath.split(/[/]/).pop();
           imgTag = `<img src="/api/screenshots/${fn}" class="w-full h-auto max-h-96 object-contain bg-slate-100 rounded-lg border border-slate-200">`;
         }
         
@@ -947,7 +948,7 @@ function updateReviewUI() {
   
   let imgTag = '<div class="h-64 flex items-center justify-center text-slate-300 text-sm font-medium">No screenshot</div>';
   if (draft.screenshotPath) {
-    const fn = draft.screenshotPath.split(/[/\\]/).pop();
+    const fn = draft.screenshotPath.split(/[/]/).pop();
     imgTag = `<img src="/api/screenshots/${fn}" class="w-full object-cover">`;
   }
   
@@ -1214,7 +1215,7 @@ async function pollGlobalSendStatus() {
         banner = document.createElement('div');
         banner.id = 'live-send-banner';
         banner.className = 'fixed top-0 left-0 right-0 z-[100] bg-red-600 text-white font-bold px-6 py-3 flex items-center justify-between shadow-xl border-b-4 border-red-800 transition-all';
-        banner.innerHTML = \`
+        banner.innerHTML = `
           <div class="flex items-center gap-3">
             <span class="animate-ping w-3 h-3 bg-white rounded-full"></span>
             <span class="text-sm tracking-widest uppercase">LIVE SENDING IN PROGRESS</span>
@@ -1223,7 +1224,7 @@ async function pollGlobalSendStatus() {
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" /></svg>
             HALT SENDING
           </button>
-        \`;
+        `;
         document.body.appendChild(banner);
         document.getElementById('app').style.paddingTop = '52px';
       }
@@ -1257,7 +1258,7 @@ function openLiveSendModal() {
     const m = document.createElement('div');
     m.id = 'live-send-modal';
     m.className = 'fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden';
-    m.innerHTML = \`
+    m.innerHTML = `
       <div class="bg-white rounded-xl shadow-xl border border-slate-200 p-6 max-w-md w-full mx-4">
         <h3 class="text-xl font-bold text-red-600 mb-2 flex items-center gap-2">
           <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
@@ -1275,7 +1276,7 @@ function openLiveSendModal() {
           <button id="live-send-submit-btn" onclick="submitLiveSend()" class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 transition opacity-50 cursor-not-allowed" disabled>Start Sending</button>
         </div>
       </div>
-    \`;
+    `;
     document.body.appendChild(m);
   }
   
@@ -1288,9 +1289,9 @@ function openLiveSendModal() {
   
   fetchAPI('/send/preview', { method: 'POST' }).then(res => {
     window.currentSendBatch = res;
-    document.getElementById('live-send-preview-text').innerText = \`You are about to dispatch \${res.count} approved emails. This action is irreversible.\`;
+    document.getElementById('live-send-preview-text').innerText = `You are about to dispatch ${res.count} approved emails. This action is irreversible.`;
     document.getElementById('live-send-count').innerText = res.count;
-    document.getElementById('live-send-confirm-input').placeholder = \`SEND \${res.count}\`;
+    document.getElementById('live-send-confirm-input').placeholder = `SEND ${res.count}`;
   }).catch(e => {
     document.getElementById('live-send-preview-text').innerText = 'Error loading preview: ' + e.message;
   });
@@ -1304,7 +1305,7 @@ function checkLiveSendInput() {
   const val = document.getElementById('live-send-confirm-input').value;
   const count = window.currentSendBatch ? window.currentSendBatch.count : 0;
   const btn = document.getElementById('live-send-submit-btn');
-  if (val === \`SEND \${count}\` && count > 0) {
+  if (val === `SEND ${count}` && count > 0) {
     btn.disabled = false;
     btn.classList.remove('opacity-50', 'cursor-not-allowed');
   } else {

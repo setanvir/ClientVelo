@@ -312,7 +312,9 @@ apiRouter.get('/jobs/:id/output', async (req, res) => {
     const { id } = req.params;
     const after = parseInt(req.query.after as string || '0', 10);
     const output = await getJobOutput(id, after);
-    res.json(output);
+    const job = await getJob(id);
+    if (!job) throw new Error('Job not found');
+    res.json({ job, lines: output.lines, nextLine: output.nextLine });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

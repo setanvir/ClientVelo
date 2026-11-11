@@ -59,6 +59,7 @@ export async function startServer(port: number, demoMode: boolean = false) {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>ClientVelo Engine</title>
+        <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
         <script src="https://cdn.tailwindcss.com"></script>
         <script>
           tailwind.config = {

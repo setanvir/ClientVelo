@@ -87,7 +87,7 @@ const ConfigSchema = z.object({
   OVERPASS_URL: z
     .string()
     .url()
-    .default('https://overpass-api.de/api/interpreter'),
+    .default('https://overpass.osm.ch/api/interpreter'),
   OVERPASS_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(25),
   MAX_DISCOVER_PER_RUN: z.coerce.number().int().positive().max(50).default(50),
   CHAIN_BLOCKLIST: z.string().default(''),
@@ -143,6 +143,7 @@ const NICHE_TAG_MAP: Record<string, string[]> = {
   Optician: ['shop=optician'],
   Physiotherapy: ['healthcare=physiotherapist'],
   Veterinary: ['amenity=veterinary'],
+  'Car Rental': ['amenity=car_rental'],
 };
 
 // ─── Validate and export ──────────────────────────────────────────────────────

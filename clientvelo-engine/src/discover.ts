@@ -167,6 +167,7 @@ async function fetchOverpass(opts: {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
           'User-Agent': userAgent,
+          'Accept': 'application/json, */*',
         },
         body: `data=${encodeURIComponent(query)}`,
       });
@@ -199,7 +200,8 @@ async function fetchOverpass(opts: {
       continue;
     }
 
-    throw new Error(`[discover] Overpass API returned HTTP ${status}`);
+    const errText = await response.text().catch(() => '');
+    throw new Error(`[discover] Overpass API returned HTTP ${status}: ${errText}`);
   }
 
   throw new Error('[discover] Max retry attempts exceeded');
