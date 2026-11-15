@@ -1,7 +1,7 @@
 <div align="center">
-  <img src="docs/assets/logo.png" alt="ClientVelo Engine Logo" width="120" />
-  <h1>ClientVelo Engine</h1>
-  <p><b>A local, zero-database B2B outreach Command Center and SaaS UI</b></p>
+  <img src="docs/assets/logo.svg" alt="ClientVelo Logo" width="280" />
+  <h1>ClientVelo</h1>
+  <p><b>Cross-Platform Lead Generation & Automated Outreach Command Center</b></p>
 
   [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
   [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18.0.0-success)](#)
